@@ -125,23 +125,16 @@ void drawGlowPlugIcon(int cx, int cy, int color) {
     drawLine(cx, cy + 10, cx + 3, cy + 15, color);
 }
 
-
 // ------------------ Metric Draw Functions ------------------
-void drawOil(int cx, int cy, int radius, bool oilValue) {
+void drawOil(int cx, int cy, bool oilValue) {
     bool critical = isCritical(0,0,0,false,true,oilValue);
     bool show = getBlinkState(critical);
     int col = oilValue ? COLOR_WHITE : COLOR_DARK;
 
-    // Draw the icon only if blink is on
     if(show) {
       drawOilIcon(cx, cy-6, col);
-      // Outer circle (rim) always visible
-      drawGaugeCircle(cx, cy, radius, true);
-    }    
-
-
-    // Label and value always visible
-    drawGaugeLabel(cx, cy, radius, "OIL", true, (int)oilValue);
+    }
+    drawGaugeLabel(cx, cy, 30, "OIL", true, (int)oilValue);
 }
 
 void drawCoolant(int cx, int cy, int radius, int value) {
@@ -210,14 +203,13 @@ void drawBigNumber(int x,int y,int number,int scale,int color){
     for(int i=0;i<len;i++) drawBigDigit(x+i*digitWidth,y,buf[i]-'0',scale,color);
 }
 
-void drawGlowPlug(int cx, int cy, int radius, bool on) {
+void drawGlowPlug(int cx, int cy, bool on) {
     if (on) {
         drawGlowPlugIcon(cx, cy - 10, COLOR_WHITE);
-        drawGaugeCircle(cx, cy, radius, true);
         graphics.setTextColor(COLOR_WHITE);
-        graphics.setCursor(cx - (strlen("GLOW") * font.xres)/2, cy + radius/2 - 4);
+        graphics.setCursor(cx - (strlen("GLOW") * font.xres)/2, cy + 11); // Adjust Y for below icon
         graphics.print("GLOW");
-        graphics.setCursor(cx - (strlen("PLUG") * font.xres)/2, cy + radius/2 + font.yres - 2);
+        graphics.setCursor(cx - (strlen("PLUG") * font.xres)/2, cy + 11 + font.yres); // Adjust Y for second line
         graphics.print("PLUG");
     }
 }
@@ -232,12 +224,16 @@ void drawDashboard() {
     int thirdWidth = xres/3;
     int gaugeY = bottomBarTopY+40;
 
+    // Draw Oil (left side)
+    drawOil(30, yres/4, oilLow); // Moved to left edge
+
+    // Draw Glow Plug (right side)
+    drawGlowPlug(xres*3/4, yres/4, glowPlugOn); // Example position, adjust as needed
+
     // Draw metrics
-    drawGlowPlug(10+30, gaugeY - 80, 30, glowPlugOn);
     drawSpeed(xres/2, bottomBarTopY/2, speed);
-    drawCoolant(thirdWidth+thirdWidth/2, gaugeY, 40, coolantTemp);
-    drawFuel(xres-thirdWidth/2, gaugeY, 30, fuelLevel);
-    drawOil(10+30, gaugeY, 30, oilLow);
+    drawCoolant(xres/4, gaugeY, 40, coolantTemp); // Moved to left
+    drawFuel(xres*3/4, gaugeY, 30, fuelLevel);   // Moved to right
 
     graphics.end();
 }

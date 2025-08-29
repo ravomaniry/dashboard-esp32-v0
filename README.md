@@ -40,3 +40,16 @@ OIL:0
 COOLANT:90
 FUEL:50
 ```
+
+WIRING:
+
+```
+Arduino TX (5V) ──470Ω──┐── ESP32 RX
+                          │
+                          1kΩ
+                          │
+                         GND
+
+ESP32 TX ────────────────> Arduino RX  (direct connection)
+GND ───────────────────── GND
+```
