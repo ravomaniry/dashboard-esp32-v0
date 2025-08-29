@@ -11,9 +11,10 @@ Font<CompositeGraphics> font(6, 8, font6x8::pixels);
 
 // --- Dashboard Data ---
 int speed = 0;
-int coolantTemp = 80;
-int fuelLevel = 75;
+int coolantTemp = 0;
+int fuelLevel = 0;
 bool oilLow = false; // LOW = critical, HIGH = ok
+bool glowPlugOn = true;
 
 // Critical thresholds
 const int CRITICAL_TEMP = 105;
@@ -114,6 +115,17 @@ void drawOilIcon(int cx, int cy, int color) {
     }
 }
 
+void drawGlowPlugIcon(int cx, int cy, int color) {
+    drawLine(cx + 10, cy - 10, cx, cy + 10, color);
+    // Spark icon at the bottom
+    drawLine(cx, cy + 10, cx - 5, cy + 5, color);
+    drawLine(cx, cy + 10, cx + 5, cy + 5, color);
+    drawLine(cx, cy + 10, cx, cy + 15, color);
+    drawLine(cx, cy + 10, cx - 3, cy + 15, color);
+    drawLine(cx, cy + 10, cx + 3, cy + 15, color);
+}
+
+
 // ------------------ Metric Draw Functions ------------------
 void drawOil(int cx, int cy, int radius, bool oilValue) {
     bool critical = isCritical(0,0,0,false,true,oilValue);
@@ -198,6 +210,18 @@ void drawBigNumber(int x,int y,int number,int scale,int color){
     for(int i=0;i<len;i++) drawBigDigit(x+i*digitWidth,y,buf[i]-'0',scale,color);
 }
 
+void drawGlowPlug(int cx, int cy, int radius, bool on) {
+    if (on) {
+        drawGlowPlugIcon(cx, cy - 10, COLOR_WHITE);
+        drawGaugeCircle(cx, cy, radius, true);
+        graphics.setTextColor(COLOR_WHITE);
+        graphics.setCursor(cx - (strlen("GLOW") * font.xres)/2, cy + radius/2 - 4);
+        graphics.print("GLOW");
+        graphics.setCursor(cx - (strlen("PLUG") * font.xres)/2, cy + radius/2 + font.yres - 2);
+        graphics.print("PLUG");
+    }
+}
+
 // ------------------ Dashboard ------------------
 void drawDashboard() {
     graphics.begin(COLOR_BLACK);
@@ -209,6 +233,7 @@ void drawDashboard() {
     int gaugeY = bottomBarTopY+40;
 
     // Draw metrics
+    drawGlowPlug(10+30, gaugeY - 80, 30, glowPlugOn);
     drawSpeed(xres/2, bottomBarTopY/2, speed);
     drawCoolant(thirdWidth+thirdWidth/2, gaugeY, 40, coolantTemp);
     drawFuel(xres-thirdWidth/2, gaugeY, 30, fuelLevel);
@@ -226,14 +251,31 @@ void setup() {
     composite.init();
     graphics.init();
     graphics.setFont(font);
+    Serial.begin(9600);
 }
 
 void loop() {
-    long t = millis();
-    speed = 110 + sin(t*0.001)*20;
-    coolantTemp = 95 + sin(t*0.0005)*15;
-    fuelLevel = 50 - (t/2000)%50;
-    oilLow = ((t/5000)%4 == 0); // simulate LOW oil occasionally
+    if (Serial.available() > 0) {
+        String message = Serial.readStringUntil('\n');
+        int colonIndex = message.indexOf(':');
+        if (colonIndex != -1) {
+            String key = message.substring(0, colonIndex);
+            String valueStr = message.substring(colonIndex + 1);
+            int value = valueStr.toInt();
+
+            if (key == "SPEED") {
+                speed = value;
+            } else if (key == "OIL") {
+                oilLow = value;
+            } else if (key == "COOLANT") {
+                coolantTemp = value;
+            } else if (key == "FUEL") {
+                fuelLevel = value;
+            } else if (key == "GLOW") {
+                glowPlugOn = value;
+            }
+        }
+    }
 
     drawDashboard();
     composite.sendFrameHalfResolution(&graphics.frame);
