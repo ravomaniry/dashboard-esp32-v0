@@ -4,6 +4,8 @@
 #include "font6x8.h"
 #include <soc/rtc.h>
 #include <math.h>
+#include <stdlib.h> // For rand()
+#include <time.h>   // For time()
 
 CompositeGraphics graphics(CompositeColorOutput::XRES, CompositeColorOutput::YRES, 0);
 CompositeColorOutput composite(CompositeColorOutput::NTSC);
@@ -16,8 +18,37 @@ int fuelLevel = 0;
 bool oilLow = false; // LOW = critical, HIGH = ok
 bool glowPlugOn = true;
 
+bool IS_DEMO = true; // New variable for demo mode
+
+unsigned long lastUpdateTime = 0; // New variable to track last update time
+const unsigned long UPDATE_INTERVAL_MS = 1000; // New constant for update interval (1 second)
+
+void randomizeValues() {
+    if( millis() > lastUpdateTime + UPDATE_INTERVAL_MS  ){
+        lastUpdateTime = millis();
+        
+        // Sweep through ranges for easier testing
+        static int sweepCounter = 0;
+        sweepCounter++;
+        
+        // Speed: sweep 0-200
+        speed = (sweepCounter * 2) % 201;
+        
+        // Coolant: sweep 60-120
+        coolantTemp = 60 + ((sweepCounter * 10) % 61);
+        
+        // Fuel: sweep 0-100
+        fuelLevel = (sweepCounter * 8) % 101;
+        
+        // Oil: alternate between LOW and HIGH
+        oilLow = (sweepCounter / 10) % 2;
+        
+        // Glow plug: alternate between ON and OFF
+        glowPlugOn = (sweepCounter / 15) % 2;
+    }
+}
+
 // Critical thresholds
-const int CRITICAL_TEMP = 105;
 const int LOW_FUEL = 10;
 const int OPTIMUM_TEMP_MIN = 85;
 const int OPTIMUM_TEMP_MAX = 95;
@@ -78,51 +109,114 @@ void drawGaugeCircle(int cx, int cy, int radius, bool oilGauge) {
     drawCircle(cx, cy, radius + 3, COLOR_WHITE);       // outer rim
 }
 
-// Draws the label and value text below the gauge
-void drawGaugeLabel(int cx, int cy, int radius, const char* label, bool oilGauge, int value)
+// Draws the label above the gauge
+void drawGaugeLabel(int cx, int cy, int height, const char* label)
 {
     graphics.setTextColor(COLOR_WHITE);
-    graphics.setCursor(cx - (strlen(label) * font.xres)/2, cy + radius/2 - 4);
+    graphics.setCursor(cx - (strlen(label) * font.xres)/2, cy - height/2 - 20);
     graphics.print(label);
-    graphics.setCursor(cx - (oilGauge ? strlen("LOW")*font.xres/2 : strlen("100")*font.xres/2), cy + radius/2 + font.yres - 2);
-    if(oilGauge) graphics.print(value ? "LOW" : "HIGH");
-    else graphics.print(value);
 }
 
-// Draws a half-pie gauge fill (for coolant/fuel)
-void drawHalfPieFill(int cx, int cy, int radius, int value, int minVal, int maxVal, int color) {
-    float ratio = float(value - minVal) / (maxVal - minVal);
-    float angleValue = -180 + ratio * 180;
-    for(int angle=-180; angle<=angleValue; angle++) {
+// Draws the value below the gauge
+void drawGaugeValue(int cx, int cy, int height, int value, bool oilGauge)
+{
+    graphics.setTextColor(COLOR_WHITE);
+    if(oilGauge) {
+        graphics.setCursor(cx - (strlen("LOW")*font.xres)/2, cy + height/2 + 10);
+        graphics.print(value ? "LOW" : "HIGH");
+    } else {
+        graphics.setCursor(cx - (strlen("100")*font.xres)/2, cy + height/2 + 10);
+        graphics.print(value);
+    }
+}
+
+// Helper function for mapping values
+long map(long x, long in_min, long in_max, long out_min, long out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+// Draws a vertical bar gauge with horizontal filling bars (terminal style)
+void drawVerticalBarGauge(int cx, int cy, int height, int value, int minVal, int maxVal, int color) {
+    // Fill with black first to clear previous state
+    graphics.fillRect(cx - 7, cy - height/2, 15, height, COLOR_BLACK);
+
+    // Draw the white outline
+    graphics.fillRect(cx - 7, cy - height/2 + 7, 1, height - 7, COLOR_WHITE);    // Left line (shortened for rounded top)
+    graphics.fillRect(cx + 6, cy - height/2 + 7, 1, height - 7, COLOR_WHITE);    // Right line (shortened for rounded top)
+    graphics.fillRect(cx - 10, cy + height/2 - 1, 21, 1, COLOR_WHITE);   // Bottom line (wider base)
+    
+    // Draw rounded top cap
+    int topY = cy - height/2;
+    for (int angle = 0; angle <= 180; angle += 5) {
         float rad = angle * M_PI / 180.0;
-        for(int r=0; r<=radius; r++) {
-            int x = cx + cos(rad)*r;
-            int y = cy + sin(rad)*r;
-            graphics.dotFast(x, y, color);
-        }
+        int x = cx + cos(rad) * 7;
+        int y = topY + 7 - sin(rad) * 7;
+        graphics.dotFast(x, y, COLOR_WHITE);
+    }
+
+    int numBars = 10;
+    int barHeight = 3;
+    int barSpace = 1;
+    int segmentHeight = barHeight + barSpace;
+
+    // Calculate how many bars to fill
+    int filledBars = map(value, minVal, maxVal, 0, numBars);
+    if (filledBars < 0) filledBars = 0;
+    if (filledBars > numBars) filledBars = numBars;
+
+    // Draw filled bars from bottom up
+    for (int i = 0; i < filledBars; i++) {
+        int barY = cy + height/2 - (i * segmentHeight) - barHeight;
+        graphics.fillRect(cx - 6, barY, 12, barHeight, color);
     }
 }
 
-// Draws a minimal oil can icon with drop closer to spout
+// Draws a more vibrant and detailed oil can icon
 void drawOilIcon(int cx, int cy, int color) {
-    graphics.fillRect(cx-8, cy-8, 16, 10, color); // body
-    graphics.fillRect(cx+8, cy-6, 4, 6, color);   // spout
-    // drop closer to spout
-    for(int y=0;y<4;y++){
-        for(int x=-y;x<=y;x++){
-            graphics.dotFast(cx+8+x, cy+8+y, color);
+    // Main body with rounded corners effect
+    graphics.fillRect(cx-8, cy-6, 16, 12, color);
+    
+    // Spout (longer and more prominent)
+    graphics.fillRect(cx+8, cy-4, 6, 8, color);
+    
+    // Handle on top
+    graphics.fillRect(cx-6, cy-8, 12, 2, color);
+    
+    // Oil drop below spout (larger and more visible)
+    for(int y=0; y<6; y++){
+        for(int x=-y; x<=y; x++){
+            graphics.dotFast(cx+10+x, cy+10+y, color);
         }
     }
+    
+    // Add some highlights for depth
+    graphics.fillRect(cx-6, cy-4, 2, 2, COLOR_WHITE);
+    graphics.fillRect(cx+10, cy-2, 2, 2, COLOR_WHITE);
 }
 
 void drawGlowPlugIcon(int cx, int cy, int color) {
-    drawLine(cx + 10, cy - 10, cx, cy + 10, color);
-    // Spark icon at the bottom
-    drawLine(cx, cy + 10, cx - 5, cy + 5, color);
-    drawLine(cx, cy + 10, cx + 5, cy + 5, color);
-    drawLine(cx, cy + 10, cx, cy + 15, color);
-    drawLine(cx, cy + 10, cx - 3, cy + 15, color);
-    drawLine(cx, cy + 10, cx + 3, cy + 15, color);
+    // Main glow plug body (vertical cylinder)
+    graphics.fillRect(cx-3, cy-8, 6, 16, color);
+    
+    // Top connector/terminal
+    graphics.fillRect(cx-4, cy-10, 8, 4, color);
+    
+    // Heating element (zigzag pattern in the middle)
+    graphics.fillRect(cx-2, cy-4, 4, 2, color);
+    graphics.fillRect(cx-1, cy-1, 2, 2, color);
+    graphics.fillRect(cx-2, cy+2, 4, 2, color);
+    
+    // Bottom threads
+    graphics.fillRect(cx-4, cy+8, 8, 2, color);
+    
+    // Glow effect (sparkles around the plug)
+    graphics.dotFast(cx-6, cy-6, COLOR_WHITE);
+    graphics.dotFast(cx+6, cy-6, COLOR_WHITE);
+    graphics.dotFast(cx-6, cy+6, COLOR_WHITE);
+    graphics.dotFast(cx+6, cy+6, COLOR_WHITE);
+    
+    // Center glow dot
+    graphics.dotFast(cx, cy, COLOR_WHITE);
 }
 
 // ------------------ Metric Draw Functions ------------------
@@ -131,46 +225,51 @@ void drawOil(int cx, int cy, bool oilValue) {
     bool show = getBlinkState(critical);
     int col = oilValue ? COLOR_WHITE : COLOR_DARK;
 
+    // Icon above
     if(show) {
-      drawOilIcon(cx, cy-6, col);
+      drawOilIcon(cx, cy-20, col);
     }
-    drawGaugeLabel(cx, cy, 30, "OIL", true, (int)oilValue);
+    // Label in middle
+    graphics.setTextColor(COLOR_WHITE);
+    graphics.setCursor(cx - (strlen("OIL") * font.xres)/2, cy);
+    graphics.print("OIL");
+    // Value below (closer to label)
+    graphics.setCursor(cx - (strlen("LOW")*font.xres)/2, cy + 10);
+    graphics.print(oilValue ? "LOW" : "HIGH");
 }
 
-void drawCoolant(int cx, int cy, int radius, int value) {
-    bool critical = isCritical(value, OPTIMUM_TEMP_MIN, OPTIMUM_TEMP_MAX, true);
+void drawVerticalGauge(int cx, int cy, int height, int value, int minVal, int maxVal, const char* label, bool isCriticalValue) {
+    bool critical = isCriticalValue;
     bool show = getBlinkState(critical);
     int col = show ? (critical ? COLOR_WHITE : COLOR_DARK) : COLOR_BLACK;
 
-    if(show) {
-        drawHalfPieFill(cx, cy, radius, value, 60, 120, col);
-        int nx = cx + cos((-180 + float(value - 60)/(120-60)*180) * M_PI / 180.0) * (radius-5);
-        int ny = cy + sin((-180 + float(value - 60)/(120-60)*180) * M_PI / 180.0) * (radius-5);
-        drawLine(cx, cy, nx, ny, COLOR_WHITE);
-        drawGaugeCircle(cx, cy, radius, false);
+    // Only draw label if one is provided
+    if (strlen(label) > 0) {
+        drawGaugeLabel(cx, cy, height, label);
     }
-    drawGaugeLabel(cx, cy, radius, "COOL", false, value);
+    
+    if(show) {
+        drawVerticalBarGauge(cx, cy, height, value, minVal, maxVal, col);
+    }
+    
+    // Only draw value if label is provided (to avoid duplicate values)
+    if (strlen(label) > 0) {
+        drawGaugeValue(cx, cy, height, value, false);
+    }
 }
 
-void drawFuel(int cx, int cy, int radius, int value) {
-    bool critical = isCritical(value, 30, 100);
-    bool show = getBlinkState(critical);
-    int col = show ? (critical ? COLOR_WHITE : COLOR_DARK) : COLOR_BLACK;
+void drawCoolant(int cx, int cy, int height, int value) {
+    drawVerticalGauge(cx, cy, height, value, 60, 120, "COOL", isCritical(value, OPTIMUM_TEMP_MIN, OPTIMUM_TEMP_MAX, true));
+}
 
-    if(show) {
-        drawHalfPieFill(cx, cy, radius, value, 0, 100, col);
-        int nx = cx + cos((-180 + float(value - 0)/(100-0)*180) * M_PI / 180.0) * (radius-5);
-        int ny = cy + sin((-180 + float(value - 0)/(100-0)*180) * M_PI / 180.0) * (radius-5);
-        drawLine(cx, cy, nx, ny, COLOR_WHITE);
-        drawGaugeCircle(cx, cy, radius, false);
-    }
-    drawGaugeLabel(cx, cy, radius, "FUEL", false, value);
+void drawFuel(int cx, int cy, int height, int value) {
+    drawVerticalGauge(cx, cy, height, value, 0, 100, "FUEL", isCritical(value, LOW_FUEL, 100));
 }
 
 void drawSpeed(int x, int y, int value) {
-    drawBigNumber(x, y-30, value, 4, COLOR_WHITE);
+    drawBigNumber(x, y, value, 4, COLOR_WHITE);
     graphics.setTextColor(COLOR_WHITE);
-    graphics.setCursor(x-(4*font.xres)/2, y+30);
+    graphics.setCursor(x-(4*font.xres)/2, y+40);
     graphics.print("km/h");
 }
 
@@ -205,12 +304,153 @@ void drawBigNumber(int x,int y,int number,int scale,int color){
 
 void drawGlowPlug(int cx, int cy, bool on) {
     if (on) {
-        drawGlowPlugIcon(cx, cy - 10, COLOR_WHITE);
+        // Icon above
+        drawGlowPlugIcon(cx, cy - 20, COLOR_WHITE);
+        // Label in middle
         graphics.setTextColor(COLOR_WHITE);
-        graphics.setCursor(cx - (strlen("GLOW") * font.xres)/2, cy + 11); // Adjust Y for below icon
+        graphics.setCursor(cx - (strlen("GLOW") * font.xres)/2, cy);
         graphics.print("GLOW");
-        graphics.setCursor(cx - (strlen("PLUG") * font.xres)/2, cy + 11 + font.yres); // Adjust Y for second line
+        // Value below (closer to label)
+        graphics.setCursor(cx - (strlen("PLUG") * font.xres)/2, cy + 10);
         graphics.print("PLUG");
+    }
+}
+
+// Draws a semi-circular gauge around the speedometer
+void drawSemiCircularGauge(int cx, int cy, int radius, int value, int minVal, int maxVal, int startAngle, int endAngle, const char* label) {
+    // Use white color for speed gauges
+    int color = COLOR_WHITE;
+    
+    // Handle angle wrapping for the fuel gauge
+    int actualEndAngle = endAngle;
+    if (endAngle < startAngle) {
+        actualEndAngle = endAngle + 360; // Wrap around
+    }
+    
+    // Draw the gauge outline (semi-circle)
+    for (int angle = startAngle; angle <= actualEndAngle; angle += 2) {
+        float rad = (angle % 360) * M_PI / 180.0;
+        int x = cx + cos(rad) * radius;
+        int y = cy + sin(rad) * radius;
+        graphics.dotFast(x, y, COLOR_WHITE);
+    }
+    
+    // Calculate how many bars to fill based on value
+    int totalBars = 20; // Number of bars in the semi-circle
+    int filledBars = map(value, minVal, maxVal, 0, totalBars);
+    if (filledBars < 0) filledBars = 0;
+    if (filledBars > totalBars) filledBars = totalBars;
+    
+    // Draw filled bars along the semi-circle (only once, no double rendering)
+    for (int i = 0; i < filledBars; i++) {
+        float progress = (float)i / (totalBars - 1);
+        int angle = startAngle + (actualEndAngle - startAngle) * progress;
+        float rad = (angle % 360) * M_PI / 180.0;
+        
+        // Draw a thicker bar perpendicular to the circle
+        int x1 = cx + cos(rad) * (radius - 10);
+        int y1 = cy + sin(rad) * (radius - 10);
+        int x2 = cx + cos(rad) * (radius + 4);
+        int y2 = cy + sin(rad) * (radius + 4);
+        
+        // Draw multiple lines to make the tick thicker
+        drawLine(x1, y1, x2, y2, color);
+        drawLine(x1+1, y1, x2+1, y2, color);
+        drawLine(x1, y1+1, x2, y2+1, color);
+    }
+    
+    // Draw the label positioned around the circle, not above it
+    if (strlen(label) > 0) {
+        graphics.setTextColor(COLOR_WHITE);
+        float labelRad = (startAngle + (actualEndAngle - startAngle) / 2.0) * M_PI / 180.0;
+        int labelX = cx + cos(labelRad) * (radius + 20);
+        int labelY = cy + sin(labelRad) * (radius + 20);
+        graphics.setCursor(labelX - (strlen(label) * font.xres)/2, labelY - font.yres/2);
+        graphics.print(label);
+    }
+}
+
+// Draws a semi-circular gauge with reverse filling (starts from bottom, fills upward)
+void drawSemiCircularGaugeReverse(int cx, int cy, int radius, int value, int minVal, int maxVal, int startAngle, int endAngle, const char* label) {
+    // Use white color for speed gauges
+    int color = COLOR_WHITE;
+    
+    // Handle angle wrapping for gauges that cross 0°
+    bool wrapsAround = (endAngle < startAngle);
+    
+    // Draw the gauge outline (semi-circle)
+    if (wrapsAround) {
+        // For angles that wrap around (e.g., 45° to 315°)
+        for (int angle = startAngle; angle <= 360; angle += 2) {
+            float rad = angle * M_PI / 180.0;
+            int x = cx + cos(rad) * radius;
+            int y = cy + sin(rad) * radius;
+            graphics.dotFast(x, y, COLOR_WHITE);
+        }
+        for (int angle = 0; angle <= endAngle; angle += 2) {
+            float rad = angle * M_PI / 180.0;
+            int x = cx + cos(rad) * radius;
+            int y = cy + sin(rad) * radius;
+            graphics.dotFast(x, y, COLOR_WHITE);
+        }
+    } else {
+        // Normal case (e.g., 135° to 225°)
+        for (int angle = startAngle; angle <= endAngle; angle += 2) {
+            float rad = angle * M_PI / 180.0;
+            int x = cx + cos(rad) * radius;
+            int y = cy + sin(rad) * radius;
+            graphics.dotFast(x, y, COLOR_WHITE);
+        }
+    }
+    
+    // Calculate how many bars to fill based on value
+    int totalBars = 20; // Number of bars in the semi-circle
+    int filledBars = map(value, minVal, maxVal, 0, totalBars);
+    if (filledBars < 0) filledBars = 0;
+    if (filledBars > totalBars) filledBars = totalBars;
+    
+    // Draw filled bars starting from endAngle (bottom) towards startAngle (top)
+    for (int i = 0; i < filledBars; i++) {
+        float progress = (float)i / (totalBars - 1);
+        int angle;
+        
+        if (wrapsAround) {
+            // For wrap-around case, calculate correctly
+            int totalSpan = (360 - startAngle) + endAngle;
+            int angleFromStart = totalSpan * progress;
+            angle = (endAngle - angleFromStart + 360) % 360;
+        } else {
+            // Normal case - start from endAngle, move toward startAngle
+            angle = endAngle - (endAngle - startAngle) * progress;
+        }
+        
+        float rad = angle * M_PI / 180.0;
+        
+        // Draw a thicker bar perpendicular to the circle
+        int x1 = cx + cos(rad) * (radius - 10);
+        int y1 = cy + sin(rad) * (radius - 10);
+        int x2 = cx + cos(rad) * (radius + 4);
+        int y2 = cy + sin(rad) * (radius + 4);
+        
+        // Draw multiple lines to make the tick thicker
+        drawLine(x1, y1, x2, y2, color);
+        drawLine(x1+1, y1, x2+1, y2, color);
+        drawLine(x1, y1+1, x2, y2+1, color);
+    }
+    
+    // Draw the label positioned around the circle, not above it
+    if (strlen(label) > 0) {
+        graphics.setTextColor(COLOR_WHITE);
+        float labelRad;
+        if (wrapsAround) {
+            labelRad = ((startAngle + endAngle + 360) / 2.0) * M_PI / 180.0;
+        } else {
+            labelRad = (startAngle + endAngle) / 2.0 * M_PI / 180.0;
+        }
+        int labelX = cx + cos(labelRad) * (radius + 20);
+        int labelY = cy + sin(labelRad) * (radius + 20);
+        graphics.setCursor(labelX - (strlen(label) * font.xres)/2, labelY - font.yres/2);
+        graphics.print(label);
     }
 }
 
@@ -224,16 +464,29 @@ void drawDashboard() {
     int thirdWidth = xres/3;
     int gaugeY = bottomBarTopY+40;
 
-    // Draw Oil (left side)
-    drawOil(30, yres/4, oilLow); // Moved to left edge
+    // Draw Oil (left side) - tight against left edge
+    drawOil(20, yres/4, oilLow);
 
-    // Draw Glow Plug (right side)
-    drawGlowPlug(xres*3/4, yres/4, glowPlugOn); // Example position, adjust as needed
+    // Draw Glow Plug (right side) - tight against right edge
+    drawGlowPlug(xres - 20, yres/4, glowPlugOn);
 
-    // Draw metrics
-    drawSpeed(xres/2, bottomBarTopY/2, speed);
-    drawCoolant(xres/4, gaugeY, 40, coolantTemp); // Moved to left
-    drawFuel(xres*3/4, gaugeY, 30, fuelLevel);   // Moved to right
+    // Draw speedometer at exact center of screen
+    int centerX = xres / 2;
+    int centerY = yres / 2;
+    drawSpeed(centerX, centerY, speed);
+    
+    // Draw left and right circular speed gauges around the speedometer
+    int gaugeRadius = 80;
+    
+    // Left speed gauge - rotated -45° (tilted counterclockwise, angled inward)
+    drawSemiCircularGauge(centerX, centerY, gaugeRadius, speed, 0, 120, 135, 225, "");
+    
+    // Right speed gauge - rotated +45° (tilted clockwise, angled inward, uses reverse function)
+    drawSemiCircularGaugeReverse(centerX, centerY, gaugeRadius, speed, 0, 120, 315, 45, "");
+    
+    // Draw traditional vertical gauges below (with their own labels)
+    drawCoolant(20, gaugeY, 40, coolantTemp); // Tight against left edge
+    drawFuel(xres - 20, gaugeY, 40, fuelLevel); // Tight against right edge
 
     graphics.end();
 }
@@ -248,27 +501,32 @@ void setup() {
     graphics.init();
     graphics.setFont(font);
     Serial.begin(9600);
+    srand(time(NULL)); // Seed random number generator
 }
 
 void loop() {
-    if (Serial.available() > 0) {
-        String message = Serial.readStringUntil('\n');
-        int colonIndex = message.indexOf(':');
-        if (colonIndex != -1) {
-            String key = message.substring(0, colonIndex);
-            String valueStr = message.substring(colonIndex + 1);
-            int value = valueStr.toInt();
+    if (IS_DEMO) {
+        randomizeValues();
+    } else {
+        if (Serial.available() > 0) {
+            String message = Serial.readStringUntil('\n');
+            int colonIndex = message.indexOf(':');
+            if (colonIndex != -1) {
+                String key = message.substring(0, colonIndex);
+                String valueStr = message.substring(colonIndex + 1);
+                int value = valueStr.toInt();
 
-            if (key == "SPEED") {
-                speed = value;
-            } else if (key == "OIL") {
-                oilLow = value;
-            } else if (key == "COOLANT") {
-                coolantTemp = value;
-            } else if (key == "FUEL") {
-                fuelLevel = value;
-            } else if (key == "GLOW") {
-                glowPlugOn = value;
+                if (key == "SPEED") {
+                    speed = value;
+                } else if (key == "OIL") {
+                    oilLow = value;
+                } else if (key == "COOLANT") {
+                    coolantTemp = value;
+                } else if (key == "FUEL") {
+                    fuelLevel = value;
+                } else if (key == "GLOW") {
+                    glowPlugOn = value;
+                }
             }
         }
     }
