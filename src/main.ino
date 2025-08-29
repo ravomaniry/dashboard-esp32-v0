@@ -18,7 +18,8 @@ int fuelLevel = 0;
 bool oilLow = false; // LOW = critical, HIGH = ok
 bool glowPlugOn = true;
 
-bool IS_DEMO = true; // New variable for demo mode
+// Set to true to make the display cycle the values.
+bool IS_DEMO = false;
 
 unsigned long lastUpdateTime = 0; // New variable to track last update time
 const unsigned long UPDATE_INTERVAL_MS = 1000; // New constant for update interval (1 second)
