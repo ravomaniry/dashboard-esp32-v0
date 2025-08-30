@@ -16,7 +16,7 @@ int speed = 0;
 int coolantTemp = 0;
 int fuelLevel = 0;
 bool oilLow = false; // LOW = critical, HIGH = ok
-bool glowPlugOn = true;
+bool glowPlugOn = false;
 
 // Set to true to make the display cycle the values.
 bool IS_DEMO = false;
@@ -525,6 +525,10 @@ void loop() {
                     coolantTemp = value;
                 } else if (key == "FUEL") {
                     fuelLevel = value;
+                } else if (key == "GLOW") {
+                    glowPlugOn = value;
+                } else if (key == "GLOW") {
+                    glowPlugOn = value;
                 } else if (key == "GLOW") {
                     glowPlugOn = value;
                 }
