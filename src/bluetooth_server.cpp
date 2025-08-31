@@ -1,7 +1,12 @@
 #include "bluetooth_server.h"
 #include "ArduinoJson.h"
-#include "mbedtls/md.h"
 #include <WiFi.h>
+
+// MAC address whitelist - add your authorized devices here
+const char* AUTHORIZED_MACS[] = {
+    "14:8:8:a6:17:c2",
+};
+const int AUTHORIZED_MACS_COUNT = sizeof(AUTHORIZED_MACS) / sizeof(AUTHORIZED_MACS[0]);
 
 // Global Bluetooth server instance
 BluetoothVehicleServer btServer;
@@ -10,7 +15,7 @@ BluetoothVehicleServer::BluetoothVehicleServer() :
     currentState(BT_DISCONNECTED),
     lastDataSend(0),
     dataSendInterval(250),
-    connectionStatusLED(LED_BUILTIN) {
+    connectionStatusLED(2) {
 }
 
 void BluetoothVehicleServer::init(int ledPin, unsigned long interval) {
@@ -28,81 +33,31 @@ void BluetoothVehicleServer::init(int ledPin, unsigned long interval) {
     }
     
     Serial.printf("Bluetooth device \"%s\" started, ready for connections!\n", BT_DEVICE_NAME);
+    Serial.println("Bluetooth MAC address: " + WiFi.macAddress());
+    Serial.println("MAC address authorization enabled - only authorized devices can connect");
     
-    // Set up callbacks
-    SerialBT.onConnect([this](uint16_t rfcomm) {
-        this->onConnect();
-    });
-    
-    SerialBT.onDisConnect([this](uint16_t rfcomm) {
-        this->onDisconnect();
-    });
+    printAuthorizedMACs();
 }
 
 void BluetoothVehicleServer::setDataInterval(unsigned long intervalMs) {
     dataSendInterval = intervalMs;
 }
 
-String BluetoothVehicleServer::generateChallenge() {
-    String challenge = "";
-    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    
-    for (int i = 0; i < CHALLENGE_LENGTH; i++) {
-        challenge += charset[random(0, sizeof(charset) - 1)];
+bool BluetoothVehicleServer::isMACAuthorized(const String& macAddress) {
+    for (int i = 0; i < AUTHORIZED_MACS_COUNT; i++) {
+        if (String(AUTHORIZED_MACS[i]).equalsIgnoreCase(macAddress)) {
+            return true;
+        }
     }
-    
-    return challenge;
+    return false;
 }
 
-String BluetoothVehicleServer::calculateExpectedHash(const String& challenge) {
-    // Calculate SHA256 hash of challenge + salt
-    String input = challenge + AUTH_SALT;
-    
-    // Use mbedtls for SHA256
-    unsigned char hash[32];
-    mbedtls_md_context_t ctx;
-    mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
-    
-    mbedtls_md_init(&ctx);
-    mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(md_type), 0);
-    mbedtls_md_starts(&ctx);
-    mbedtls_md_update(&ctx, (const unsigned char*)input.c_str(), input.length());
-    mbedtls_md_finish(&ctx, hash);
-    mbedtls_md_free(&ctx);
-    
-    // Convert to hex string
-    String hashStr = "";
-    for (int i = 0; i < 32; i++) {
-        if (hash[i] < 16) hashStr += "0";
-        hashStr += String(hash[i], HEX);
+void BluetoothVehicleServer::printAuthorizedMACs() {
+    Serial.println("=== Authorized MAC Addresses ===");
+    for (int i = 0; i < AUTHORIZED_MACS_COUNT; i++) {
+        Serial.printf("%d: %s\n", i + 1, AUTHORIZED_MACS[i]);
     }
-    
-    return hashStr;
-}
-
-bool BluetoothVehicleServer::verifyAuthentication(const String& response) {
-    String expectedHash = calculateExpectedHash(currentChallenge);
-    return response.equalsIgnoreCase(expectedHash);
-}
-
-void BluetoothVehicleServer::sendAuthChallenge() {
-    currentChallenge = generateChallenge();
-    String challengeMsg = "CHALLENGE:" + currentChallenge + "\n";
-    SerialBT.print(challengeMsg);
-    Serial.println("Sent challenge: " + challengeMsg);
-}
-
-void BluetoothVehicleServer::handleAuthResponse(const String& response) {
-    if (verifyAuthentication(response)) {
-        currentState = BT_AUTHENTICATED;
-        SerialBT.println("AUTH OK");
-        Serial.println("Authentication successful");
-        digitalWrite(connectionStatusLED, HIGH); // Solid light for authenticated
-    } else {
-        SerialBT.println("AUTH FAIL");
-        Serial.println("Authentication failed");
-        currentState = BT_CONNECTED; // Stay connected but not authenticated
-    }
+    Serial.println("================================");
 }
 
 String BluetoothVehicleServer::createJsonData() {
@@ -127,45 +82,77 @@ String BluetoothVehicleServer::createJsonData() {
 }
 
 void BluetoothVehicleServer::sendVehicleData() {
-    if (currentState != BT_AUTHENTICATED) return;
+    if (currentState != BT_CONNECTED) return;
     
     unsigned long currentTime = millis();
     if (currentTime - lastDataSend >= dataSendInterval) {
         String jsonData = createJsonData();
-        SerialBT.println(jsonData);
         
-        // Debug output (comment out for production)
-        Serial.println("Sent: " + jsonData);
+        // Send data with error checking
+        if (SerialBT.println(jsonData)) {
+            // Debug output (comment out for production)
+            Serial.println("Sent: " + jsonData);
+        } else {
+            Serial.println("Failed to send data");
+        }
         
         lastDataSend = currentTime;
     }
 }
 
 void BluetoothVehicleServer::update() {
-    // Handle incoming data
+    // Check if client is connected by trying to read connection status
+    static unsigned long lastConnectionCheck = 0;
+    unsigned long currentTime = millis();
+    
+    // Check connection status every 2 seconds
+    if (currentTime - lastConnectionCheck >= 2000) {
+        lastConnectionCheck = currentTime;
+        
+        // Try to detect connection by checking if we can write
+        if (SerialBT.hasClient()) {
+            if (currentState == BT_DISCONNECTED) {
+                // Get the connected device's MAC address
+                uint8_t mac[6];
+                SerialBT.getBtAddress(mac);
+                String clientMAC = String(mac[0], HEX) + ":" + String(mac[1], HEX) + ":" + String(mac[2], HEX) + ":" + String(mac[3], HEX) + ":" + String(mac[4], HEX) + ":" + String(mac[5], HEX);
+                Serial.printf("Bluetooth client attempting to connect: %s\n", clientMAC.c_str());
+                
+                // Check if MAC is authorized
+                if (isMACAuthorized(clientMAC)) {
+                    Serial.println("MAC address authorized - connection accepted!");
+                    currentState = BT_CONNECTED;
+                    digitalWrite(connectionStatusLED, HIGH);
+                } else {
+                    Serial.println("MAC address not authorized - connection rejected!");
+                    SerialBT.disconnect();
+                    digitalWrite(connectionStatusLED, LOW);
+                }
+            }
+        } else {
+            if (currentState != BT_DISCONNECTED) {
+                Serial.println("Bluetooth client disconnected!");
+                currentState = BT_DISCONNECTED;
+                digitalWrite(connectionStatusLED, LOW);
+            }
+        }
+    }
+    
+    // Handle incoming data (just for debugging)
     if (SerialBT.available()) {
         String message = SerialBT.readStringUntil('\n');
         message.trim();
-        
         Serial.println("Received: " + message);
-        
-        if (currentState == BT_AUTHENTICATING) {
-            handleAuthResponse(message);
-        }
-        // Add other message handling here if needed
     }
     
-    // Send vehicle data if authenticated
-    if (currentState == BT_AUTHENTICATED) {
+    // Send vehicle data if connected
+    if (currentState == BT_CONNECTED) {
         sendVehicleData();
     }
     
     // Update LED status
     if (currentState == BT_CONNECTED) {
-        // Blink LED while waiting for authentication
-        digitalWrite(connectionStatusLED, (millis() / 500) % 2);
-    } else if (currentState == BT_AUTHENTICATED) {
-        // Solid LED when authenticated
+        // Solid LED when connected
         digitalWrite(connectionStatusLED, HIGH);
     } else {
         // LED off when disconnected
@@ -180,29 +167,9 @@ void BluetoothVehicleServer::disconnect() {
 }
 
 bool BluetoothVehicleServer::isConnected() {
-    return currentState != BT_DISCONNECTED;
-}
-
-bool BluetoothVehicleServer::isAuthenticated() {
-    return currentState == BT_AUTHENTICATED;
+    return currentState == BT_CONNECTED;
 }
 
 BluetoothState BluetoothVehicleServer::getState() {
     return currentState;
-}
-
-void BluetoothVehicleServer::onConnect() {
-    Serial.println("Bluetooth client connected");
-    currentState = BT_CONNECTED;
-    
-    // Wait a moment then send challenge
-    delay(100);
-    currentState = BT_AUTHENTICATING;
-    sendAuthChallenge();
-}
-
-void BluetoothVehicleServer::onDisconnect() {
-    Serial.println("Bluetooth client disconnected");
-    currentState = BT_DISCONNECTED;
-    digitalWrite(connectionStatusLED, LOW);
 }

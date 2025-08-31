@@ -7,50 +7,44 @@
 
 // Bluetooth configuration
 #define BT_DEVICE_NAME "RAVO_CAR_DASH"
-#define AUTH_SALT "super_secret_salt"
-#define CHALLENGE_LENGTH 16
+#define MAX_WHITELIST_SIZE 10
 
 // Connection states
 enum BluetoothState {
     BT_DISCONNECTED,
-    BT_CONNECTED,
-    BT_AUTHENTICATING,
-    BT_AUTHENTICATED
+    BT_CONNECTED
 };
+
+// MAC address whitelist - add your authorized devices here
+extern const char* AUTHORIZED_MACS[];
+extern const int AUTHORIZED_MACS_COUNT;
 
 // Bluetooth server class
 class BluetoothVehicleServer {
 private:
     BluetoothSerial SerialBT;
     BluetoothState currentState;
-    String currentChallenge;
     unsigned long lastDataSend;
     unsigned long dataSendInterval;
     int connectionStatusLED;
     
-    String generateChallenge();
-    String calculateExpectedHash(const String& challenge);
-    bool verifyAuthentication(const String& response);
-    void sendAuthChallenge();
-    void handleAuthResponse(const String& response);
+    bool isMACAuthorized(const String& macAddress);
     void sendVehicleData();
     String createJsonData();
 
 public:
     BluetoothVehicleServer();
     
-    void init(int ledPin = LED_BUILTIN, unsigned long interval = 250);
+    void init(int ledPin = 2, unsigned long interval = 250);
     void setDataInterval(unsigned long intervalMs);
     void update();
     void disconnect();
     
     bool isConnected();
-    bool isAuthenticated();
     BluetoothState getState();
     
-    // Callbacks
-    void onConnect();
-    void onDisconnect();
+    // MAC address management
+    void printAuthorizedMACs();
 };
 
 // Global Bluetooth server instance

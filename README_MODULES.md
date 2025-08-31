@@ -1,16 +1,14 @@
 # ESP32 Vehicle Dashboard - Modular Structure
 
-This project has been refactored into a modular architecture for better organization, maintainability, and reusability.
+This project has been refactored into a modular architecture for better organization, maintainability, and reusability. The ESP32 acts as a **pure sensor data transmitter** - it reads vehicle sensors and sends data to the Android app via Bluetooth, with no display output. This creates a lightweight, power-efficient system focused solely on data collection and transmission.
 
 ## Project Structure
 
 ```
 src/
 ├── main.ino                 # Main application entry point
-├── graphics_utils.h/.cpp    # Basic drawing functions and utilities
 ├── vehicle_data.h/.cpp      # Sensor data management and reading
-├── bluetooth_server.h/.cpp  # Bluetooth server with authentication
-└── dashboard.h/.cpp         # Dashboard rendering and display logic
+└── bluetooth_server.h/.cpp  # Bluetooth server with authentication
 ```
 
 ## Module Responsibilities
@@ -19,23 +17,13 @@ src/
 
 - **Purpose**: Application entry point and main loop coordination
 - **Features**:
-  - ESP32 initialization and power management
+  - ESP32 initialization and configuration
   - Module initialization and coordination
-  - Main application loop with proper timing
-  - Serial command handling for testing/debugging
-  - Demo mode support
+  - Main application loop with sensor timing
+  - Demo mode for testing sensor values
+  - Pure data transmission focus
 
-### 2. `graphics_utils` Module
-
-- **Purpose**: Low-level graphics drawing functions
-- **Features**:
-  - Basic shapes (lines, circles, rectangles)
-  - Seven-segment display for speedometer
-  - Icon drawing (oil, glow plug)
-  - Color constants and graphics utilities
-  - Hardware abstraction for graphics operations
-
-### 3. `vehicle_data` Module
+### 2. `vehicle_data` Module
 
 - **Purpose**: Vehicle sensor data management
 - **Features**:
@@ -88,16 +76,16 @@ src/
 }
 ```
 
-### 5. `dashboard` Module
+### 3. `bluetooth_server` Module
 
-- **Purpose**: Dashboard display rendering
+- **Purpose**: Bluetooth communication with Android app
 - **Features**:
-  - Complete dashboard layout management
-  - Gauge rendering (vertical bar, semi-circular)
-  - Critical status indication with blinking
-  - Speedometer display (placeholder for GPS-based speed)
-  - Vehicle status icons and indicators
-  - Demo mode for testing
+  - Bluetooth Classic (SPP) server implementation
+  - SHA256-based authentication protocol
+  - JSON data transmission
+  - Connection status management
+  - Configurable data transmission intervals
+  - LED status indication
 
 ## Hardware Configuration
 
@@ -126,6 +114,13 @@ SensorPins sensorPins = {
 4. **Oil Pressure**: Automotive oil pressure switch
 5. **Light Status**: Optocouplers or voltage dividers for vehicle electrical system
 
+### Power Management:
+
+- **No Display**: Significantly reduced power consumption
+- **Sensor Reading**: Only active during data transmission intervals
+- **Bluetooth**: Low-power transmission mode
+- **Sleep Mode**: Can implement deep sleep between readings for maximum efficiency
+
 ## Usage
 
 ### Compilation
@@ -138,13 +133,12 @@ pio run
 # Open main.ino and compile normally
 ```
 
-### Serial Commands
+### Demo Mode
 
-- `DEMO:1/0` - Enable/disable demo mode
-- `STATUS` - Show current system status
-- `INTERVAL:xxx` - Set Bluetooth data interval (50-5000ms)
-- `SENSOR:type:value` - Set sensor value for testing
-- `HELP` - Show available commands
+- Set `IS_DEMO = true` in the code to enable demo mode
+- Demo mode cycles through test values for all sensors
+- Useful for testing Bluetooth transmission without real sensors
+- All sensor values cycle through realistic ranges for testing
 
 ### Bluetooth Connection
 
@@ -175,5 +169,4 @@ pio run
 
 - ESP32 Arduino Core
 - ArduinoJson library (for JSON serialization)
-- ESP32CompositeColorVideo library (for display)
 - Built-in ESP32 Bluetooth and crypto libraries
