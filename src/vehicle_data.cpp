@@ -27,6 +27,8 @@ void initSensors() {
     currentVehicleData.leftTurnSignal = false;
     currentVehicleData.rightTurnSignal = false;
     currentVehicleData.hazardLights = false;
+    currentVehicleData.speed = 0.0;
+    currentVehicleData.location = "0.0,0.0";
 }
 
 // All sensor reading functions removed - ESP32 receives data via serial communication

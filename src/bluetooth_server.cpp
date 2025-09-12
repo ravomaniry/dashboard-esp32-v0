@@ -5,6 +5,7 @@
 // MAC address whitelist - add your authorized devices here
 const char* AUTHORIZED_MACS[] = {
     "14:8:8:a6:17:c2",
+    "d4:22:3f:5a:bd:7c",
 };
 const int AUTHORIZED_MACS_COUNT = sizeof(AUTHORIZED_MACS) / sizeof(AUTHORIZED_MACS[0]);
 
@@ -74,6 +75,8 @@ String BluetoothVehicleServer::createJsonData() {
     doc["leftTurnSignal"] = currentVehicleData.leftTurnSignal;
     doc["rightTurnSignal"] = currentVehicleData.rightTurnSignal;
     doc["hazardLights"] = currentVehicleData.hazardLights;
+    doc["speed"] = currentVehicleData.speed;
+    doc["location"] = currentVehicleData.location;
     
     String jsonString;
     serializeJson(doc, jsonString);

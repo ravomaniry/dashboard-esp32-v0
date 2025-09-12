@@ -57,13 +57,24 @@ void randomizeValues() {
         currentVehicleData.leftTurnSignal = (sweepCounter / 13) % 2;
         currentVehicleData.rightTurnSignal = (sweepCounter / 17) % 2;
         currentVehicleData.hazardLights = (sweepCounter / 19) % 2;
+        
+        // Speed: sweep 0-120 km/h
+        currentVehicleData.speed = (sweepCounter * 2) % 121;
+        
+        // Location: simulate movement around a small area (demo coordinates)
+        float lat = 40.7128 + (sin(sweepCounter * 0.1) * 0.01);
+        float lon = -74.0060 + (cos(sweepCounter * 0.1) * 0.01);
+        currentVehicleData.location = String(lat, 4) + "," + String(lon, 4);
     }
 }
 
 void setup() {
     // Initialize serial communication
     Serial.begin(115200);
+    Serial2.begin(115200, SERIAL_8N1, 16, 17);  // Initialize Serial2 with custom pins: RX=16, TX=17
+    
     Serial.println("ESP32 Vehicle Data Relay starting...");
+    Serial.println("Dual Arduino support enabled");
     
     // Initialize random number generator
     srand(time(NULL));
@@ -80,7 +91,9 @@ void setup() {
     Serial.printf("Device name: %s\n", "RAVO_CAR_DASH");
     Serial.println("Ready for Bluetooth connections.");
     Serial.println("Waiting for serial data from Arduinos...");
-    Serial.println("Message format: KEY:VALUE (e.g., COOLANT:90, FUEL:50)");
+    Serial.println("Arduino 1: Serial (TX0/RX0)");
+    Serial.println("Arduino 2: Serial2 (TX2/RX2)");
+    Serial.println("Message format: KEY:VALUE (e.g., SPEED:65, LOCATION:40.7128,-74.0060, COOLANT:90, FUEL:50)");
 }
 
 void loop() {
@@ -99,11 +112,18 @@ void loop() {
         lastSensorUpdate = currentTime;
     }
     
-    // Handle serial communication from Arduinos
+    // Handle serial communication from Arduino 1 (Serial)
     if (Serial.available() > 0) {
         String message = Serial.readStringUntil('\n');
         message.trim();
-        handleSerialMessage(message);
+        handleSerialMessage(message, "Arduino1");
+    }
+    
+    // Handle serial communication from Arduino 2 (Serial2)
+    if (Serial2.available() > 0) {
+        String message = Serial2.readStringUntil('\n');
+        message.trim();
+        handleSerialMessage(message, "Arduino2");
     }
     
     // Handle Bluetooth communication (send data to Android app)
@@ -115,9 +135,11 @@ void loop() {
 
 /**
  * Handle serial messages from Arduinos in KEY:VALUE format
- * Supported keys: SPEED, COOLANT, FUEL, OIL, GLOW, BATTERY, DRL, LOWBEAM, HIGHBEAM, LEFTURN, RIGHTURN, HAZARD
+ * Supported keys: SPEED, LOCATION, COOLANT, FUEL, OIL, GLOW, BATTERY, DRL, LOWBEAM, HIGHBEAM, LEFTURN, RIGHTURN, HAZARD
+ * @param message The serial message in KEY:VALUE format
+ * @param arduinoId Identifier for which Arduino sent the message ("Arduino1" or "Arduino2")
  */
-void handleSerialMessage(const String& message) {
+void handleSerialMessage(const String& message, const String& arduinoId) {
     int colonIndex = message.indexOf(':');
     if (colonIndex == -1) {
         Serial.println("Invalid message format. Use KEY:VALUE");
@@ -131,38 +153,58 @@ void handleSerialMessage(const String& message) {
     float value = valueStr.toFloat();
     
     if (key == "SPEED") {
-        // Speed is GPS-based, not sent to Android app
-        Serial.printf("Received speed: %s km/h\n", valueStr.c_str());
+        currentVehicleData.speed = value;
+        Serial.printf("[%s] Received speed: %.1f km/h\n", arduinoId.c_str(), currentVehicleData.speed);
+    }
+    else if (key == "LOCATION") {
+        currentVehicleData.location = valueStr;
+        Serial.printf("[%s] Received location: %s\n", arduinoId.c_str(), currentVehicleData.location.c_str());
     }
     else if (key == "COOLANT") {
         currentVehicleData.coolantTemp = value;
-        Serial.printf("Received coolant temp: %.1f°C\n", value);
+        Serial.printf("[%s] Received coolant temp: %.1f°C\n", arduinoId.c_str(), value);
     }
     else if (key == "FUEL") {
         currentVehicleData.fuelLevel = constrain(value, 0, 100);
-        Serial.printf("Received fuel level: %.1f%%\n", currentVehicleData.fuelLevel);
+        Serial.printf("[%s] Received fuel level: %.1f%%\n", arduinoId.c_str(), currentVehicleData.fuelLevel);
     }
     else if (key == "OIL") {
         currentVehicleData.oilWarning = (value != 0);
-        Serial.printf("Received oil warning: %s\n", currentVehicleData.oilWarning ? "ON" : "OFF");
+        Serial.printf("[%s] Received oil warning: %s\n", arduinoId.c_str(), currentVehicleData.oilWarning ? "ON" : "OFF");
     }
     else if (key == "BATTERY") {
         currentVehicleData.batteryVoltage = value;
-        Serial.printf("Received battery voltage: %.2fV\n", value);
+        Serial.printf("[%s] Received battery voltage: %.2fV\n", arduinoId.c_str(), value);
     }
     else if (key == "DRL") {
         currentVehicleData.drlOn = (value != 0);
-        Serial.printf("Received DRL status: %s\n", currentVehicleData.drlOn ? "ON" : "OFF");
+        Serial.printf("[%s] Received DRL status: %s\n", arduinoId.c_str(), currentVehicleData.drlOn ? "ON" : "OFF");
     }
     else if (key == "LOWBEAM") {
         currentVehicleData.lowBeamOn = (value != 0);
-        Serial.printf("Received low beam status: %s\n", currentVehicleData.lowBeamOn ? "ON" : "OFF");
+        Serial.printf("[%s] Received low beam status: %s\n", arduinoId.c_str(), currentVehicleData.lowBeamOn ? "ON" : "OFF");
+    }
+    else if (key == "HIGHBEAM") {
+        currentVehicleData.highBeamOn = (value != 0);
+        Serial.printf("[%s] Received high beam status: %s\n", arduinoId.c_str(), currentVehicleData.highBeamOn ? "ON" : "OFF");
+    }
+    else if (key == "LEFTURN") {
+        currentVehicleData.leftTurnSignal = (value != 0);
+        Serial.printf("[%s] Received left turn signal: %s\n", arduinoId.c_str(), currentVehicleData.leftTurnSignal ? "ON" : "OFF");
+    }
+    else if (key == "RIGHTURN") {
+        currentVehicleData.rightTurnSignal = (value != 0);
+        Serial.printf("[%s] Received right turn signal: %s\n", arduinoId.c_str(), currentVehicleData.rightTurnSignal ? "ON" : "OFF");
+    }
+    else if (key == "HAZARD") {
+        currentVehicleData.hazardLights = (value != 0);
+        Serial.printf("[%s] Received hazard lights: %s\n", arduinoId.c_str(), currentVehicleData.hazardLights ? "ON" : "OFF");
     }
     else if (key == "GLOW") {
         // Glow plug status (not sent to Android app)
-        Serial.printf("Received glow plug status: %s\n", value != 0 ? "ON" : "OFF");
+        Serial.printf("[%s] Received glow plug status: %s\n", arduinoId.c_str(), value != 0 ? "ON" : "OFF");
     }
     else {
-        Serial.printf("Unknown key: %s\n", key.c_str());
+        Serial.printf("[%s] Unknown key: %s\n", arduinoId.c_str(), key.c_str());
     }
 }
