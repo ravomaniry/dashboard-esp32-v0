@@ -23,9 +23,14 @@
 // Configuration
 #define CONNECTION_LED_PIN 2  // Built-in LED pin for most ESP32 boards
 #define DATA_SEND_INTERVAL 250  // Send data every 250ms (4Hz)
+#define MESSAGE_LED_FLASH_DURATION 100  // LED flash duration in milliseconds
 
 // Demo mode - set to true to cycle through test values
 bool IS_DEMO = false;
+
+// LED flash variables
+unsigned long ledFlashStartTime = 0;
+bool ledFlashActive = false;
 
 void randomizeValues() {
     static unsigned long lastUpdateTime = 0;
@@ -58,6 +63,9 @@ void randomizeValues() {
         currentVehicleData.rightTurnSignal = (sweepCounter / 17) % 2;
         currentVehicleData.hazardLights = (sweepCounter / 19) % 2;
         
+        // Reverse gear: cycle every 23 iterations
+        currentVehicleData.reverseGear = (sweepCounter / 23) % 2;
+        
         // Speed: sweep 0-120 km/h
         currentVehicleData.speed = (sweepCounter * 2) % 121;
         
@@ -65,6 +73,31 @@ void randomizeValues() {
         float lat = 40.7128 + (sin(sweepCounter * 0.1) * 0.01);
         float lon = -74.0060 + (cos(sweepCounter * 0.1) * 0.01);
         currentVehicleData.location = String(lat, 4) + "," + String(lon, 4);
+    }
+}
+
+/**
+ * Flash the built-in LED for a brief moment to indicate message received
+ */
+void flashMessageLED() {
+    ledFlashStartTime = millis();
+    ledFlashActive = true;
+    digitalWrite(CONNECTION_LED_PIN, HIGH);
+}
+
+/**
+ * Update LED flash state - call this in the main loop
+ */
+void updateMessageLED() {
+    if (ledFlashActive) {
+        unsigned long currentTime = millis();
+        if (currentTime - ledFlashStartTime >= MESSAGE_LED_FLASH_DURATION) {
+            ledFlashActive = false;
+            // Only turn off LED if Bluetooth is not connected
+            if (!btServer.isConnected()) {
+                digitalWrite(CONNECTION_LED_PIN, LOW);
+            }
+        }
     }
 }
 
@@ -129,13 +162,16 @@ void loop() {
     // Handle Bluetooth communication (send data to Android app)
     btServer.update();
     
+    // Update message LED flash state
+    updateMessageLED();
+    
     // Small delay to prevent watchdog issues
     delayMicroseconds(100);
 }
 
 /**
  * Handle serial messages from Arduinos in KEY:VALUE format
- * Supported keys: SPEED, LOCATION, COOLANT, FUEL, OIL, GLOW, BATTERY, DRL, LOWBEAM, HIGHBEAM, LEFTURN, RIGHTURN, HAZARD
+ * Supported keys: SPEED, LOCATION, COOLANT, FUEL, OIL, GLOW, BATTERY, DRL, LOWBEAM, HIGHBEAM, LEFTURN, RIGHTURN, HAZARD, REVERSE
  * @param message The serial message in KEY:VALUE format
  * @param arduinoId Identifier for which Arduino sent the message ("Arduino1" or "Arduino2")
  */
@@ -145,6 +181,9 @@ void handleSerialMessage(const String& message, const String& arduinoId) {
         Serial.println("Invalid message format. Use KEY:VALUE");
         return;
     }
+    
+    // Flash LED to indicate message received
+    flashMessageLED();
     
     String key = message.substring(0, colonIndex);
     String valueStr = message.substring(colonIndex + 1);
@@ -199,6 +238,10 @@ void handleSerialMessage(const String& message, const String& arduinoId) {
     else if (key == "HAZARD") {
         currentVehicleData.hazardLights = (value != 0);
         Serial.printf("[%s] Received hazard lights: %s\n", arduinoId.c_str(), currentVehicleData.hazardLights ? "ON" : "OFF");
+    }
+    else if (key == "REVERSE") {
+        currentVehicleData.reverseGear = (value != 0);
+        Serial.printf("[%s] Received reverse gear: %s\n", arduinoId.c_str(), currentVehicleData.reverseGear ? "ON" : "OFF");
     }
     else if (key == "GLOW") {
         // Glow plug status (not sent to Android app)

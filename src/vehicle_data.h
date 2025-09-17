@@ -15,6 +15,7 @@ struct VehicleData {
     bool leftTurnSignal;   // Left turn signal
     bool rightTurnSignal;  // Right turn signal
     bool hazardLights;     // Hazard lights
+    bool reverseGear;      // Reverse gear engaged
     float speed;           // Vehicle speed in km/h
     String location;       // GPS location in "lat,lon" format
 };

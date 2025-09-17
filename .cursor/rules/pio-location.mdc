@@ -1,0 +1,5 @@
+---
+description: pio is in this location /home/ravo/.platformio/penv/bin/pio
+globs:
+alwaysApply: true
+---

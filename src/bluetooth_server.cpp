@@ -75,6 +75,7 @@ String BluetoothVehicleServer::createJsonData() {
     doc["leftTurnSignal"] = currentVehicleData.leftTurnSignal;
     doc["rightTurnSignal"] = currentVehicleData.rightTurnSignal;
     doc["hazardLights"] = currentVehicleData.hazardLights;
+    doc["reverseGear"] = currentVehicleData.reverseGear;
     doc["speed"] = currentVehicleData.speed;
     doc["location"] = currentVehicleData.location;
     

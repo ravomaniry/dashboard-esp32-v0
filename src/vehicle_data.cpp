@@ -27,6 +27,7 @@ void initSensors() {
     currentVehicleData.leftTurnSignal = false;
     currentVehicleData.rightTurnSignal = false;
     currentVehicleData.hazardLights = false;
+    currentVehicleData.reverseGear = false;
     currentVehicleData.speed = 0.0;
     currentVehicleData.location = "0.0,0.0";
 }
