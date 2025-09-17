@@ -25,7 +25,7 @@
 #define DATA_SEND_INTERVAL 250  // Send data every 250ms (4Hz)
 
 // Demo mode - set to true to cycle through test values
-bool IS_DEMO = true;
+bool IS_DEMO = false;
 
 void randomizeValues() {
     static unsigned long lastUpdateTime = 0;
