@@ -4,8 +4,8 @@
  * This code implements a vehicle data relay system that:
  * 1. Receives sensor data from Arduinos via serial communication
  * 2. Parses serial messages in KEY:VALUE format
- * 3. Acts as Bluetooth server to send data to Android app (ONE-WAY ONLY)
- * 4. Includes authentication protocol for secure communication
+ * 3. Acts as WiFi server to send data to web clients (ONE-WAY ONLY)
+ * 4. Includes web interface for data access
  * 5. No sensor reading - pure data relay
  * 
  * Serial Format: KEY:VALUE (e.g., SPEED:120, COOLANT:90, FUEL:50)
@@ -18,7 +18,7 @@
 
 // Our modular components
 #include "vehicle_data.h"
-#include "bluetooth_server.h"
+#include "wifi_server.h"
 
 // Configuration
 #define CONNECTION_LED_PIN 2  // Built-in LED pin for most ESP32 boards
@@ -93,8 +93,8 @@ void updateMessageLED() {
         unsigned long currentTime = millis();
         if (currentTime - ledFlashStartTime >= MESSAGE_LED_FLASH_DURATION) {
             ledFlashActive = false;
-            // Only turn off LED if Bluetooth is not connected
-            if (!btServer.isConnected()) {
+            // Only turn off LED if WiFi is not connected
+            if (!wifiServer.isConnected()) {
                 digitalWrite(CONNECTION_LED_PIN, LOW);
             }
         }
@@ -116,13 +116,15 @@ void setup() {
     Serial.println("Initializing vehicle data structure...");
     initSensors();
     
-    // Initialize Bluetooth server
-    Serial.println("Initializing Bluetooth server...");
-    btServer.init(CONNECTION_LED_PIN, DATA_SEND_INTERVAL);
+    // Initialize WiFi server
+    Serial.println("Initializing WiFi server...");
+    wifiServer.init(CONNECTION_LED_PIN, DATA_SEND_INTERVAL);
     
     Serial.println("Setup complete!");
     Serial.printf("Device name: %s\n", "RAVO_CAR_DASH");
-    Serial.println("Ready for Bluetooth connections.");
+    Serial.println("Ready for WiFi connections.");
+    Serial.printf("WiFi SSID: %s\n", wifiServer.getSSID().c_str());
+    Serial.printf("IP Address: %s\n", wifiServer.getIPAddress().c_str());
     Serial.println("Waiting for serial data from Arduinos...");
     Serial.println("Arduino 1: Serial (TX0/RX0)");
     Serial.println("Arduino 2: Serial2 (TX2/RX2)");
@@ -159,8 +161,8 @@ void loop() {
         handleSerialMessage(message, "Arduino2");
     }
     
-    // Handle Bluetooth communication (send data to Android app)
-    btServer.update();
+    // Handle WiFi communication (send data to web clients)
+    wifiServer.update();
     
     // Update message LED flash state
     updateMessageLED();
