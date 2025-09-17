@@ -95,7 +95,7 @@ void BluetoothVehicleServer::sendVehicleData() {
         // Send data with error checking
         if (SerialBT.println(jsonData)) {
             // Debug output (comment out for production)
-            Serial.println("Sent: " + jsonData);
+            // Serial.println("Sent: " + jsonData);
         } else {
             Serial.println("Failed to send data");
         }

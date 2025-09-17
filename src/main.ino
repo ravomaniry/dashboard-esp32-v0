@@ -178,7 +178,7 @@ void loop() {
 void handleSerialMessage(const String& message, const String& arduinoId) {
     int colonIndex = message.indexOf(':');
     if (colonIndex == -1) {
-        Serial.println("Invalid message format. Use KEY:VALUE");
+        // Debug output (comment out for production to prevent feedback loop)
         return;
     }
     
@@ -248,6 +248,7 @@ void handleSerialMessage(const String& message, const String& arduinoId) {
         Serial.printf("[%s] Received glow plug status: %s\n", arduinoId.c_str(), value != 0 ? "ON" : "OFF");
     }
     else {
-        Serial.printf("[%s] Unknown key: %s\n", arduinoId.c_str(), key.c_str());
+        // Debug output (comment out for production to prevent feedback loop)
+        // Serial.printf("[%s] Unknown key: %s\n", arduinoId.c_str(), key.c_str());
     }
 }
