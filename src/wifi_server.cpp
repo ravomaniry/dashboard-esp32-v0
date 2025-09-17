@@ -9,9 +9,7 @@ WiFiVehicleServer::WiFiVehicleServer() :
     dataSendInterval(250),
     connectionStatusLED(2),
     apSSID(WIFI_SSID),
-    apPassword(WIFI_PASSWORD),
-    lastDataChangeTime(0),
-    dataHasChanged(false) {
+    apPassword(WIFI_PASSWORD) {
 }
 
 void WiFiVehicleServer::init(int ledPin, unsigned long interval) {
@@ -22,10 +20,6 @@ void WiFiVehicleServer::init(int ledPin, unsigned long interval) {
     pinMode(connectionStatusLED, OUTPUT);
     digitalWrite(connectionStatusLED, LOW);
     
-    // Initialize long polling variables
-    lastJsonData = createJsonData();
-    lastDataChangeTime = millis();
-    dataHasChanged = false;
     
     // Start in AP mode by default
     startAP(apSSID, apPassword);
@@ -59,11 +53,8 @@ void WiFiVehicleServer::setupWebServer() {
     // Root endpoint - simple status page
     server.on("/", [this]() { handleRoot(); });
     
-    // Data endpoint - returns JSON vehicle data (immediate)
+    // Data endpoint - returns JSON vehicle data
     server.on("/data", [this]() { handleData(); });
-    
-    // Long polling endpoint - waits for data changes
-    server.on("/poll", [this]() { handleLongPoll(); });
     
     // Handle 404
     server.onNotFound([this]() { handleNotFound(); });
@@ -81,7 +72,6 @@ void WiFiVehicleServer::handleRoot() {
     response += "MAC: " + WiFi.macAddress() + "\n";
     response += "\nEndpoints:\n";
     response += "- /data    : Get current vehicle data (JSON)\n";
-    response += "- /poll    : Long polling for real-time updates\n";
     response += "\nServer ready for vehicle data connections.\n";
     
     server.send(200, "text/plain", response);
@@ -92,61 +82,7 @@ void WiFiVehicleServer::handleData() {
     server.send(200, "application/json", jsonData);
 }
 
-void WiFiVehicleServer::handleLongPoll() {
-    unsigned long startTime = millis();
-    unsigned long timeout = LONG_POLL_TIMEOUT_MS;
-    
-    // Check if client wants a custom timeout
-    if (server.hasArg("timeout")) {
-        timeout = server.arg("timeout").toInt();
-        if (timeout > LONG_POLL_TIMEOUT_MS) {
-            timeout = LONG_POLL_TIMEOUT_MS;
-        }
-    }
-    
-    // Wait for data to change or timeout
-    while (millis() - startTime < timeout) {
-        // Check for data changes
-        checkForDataChanges();
-        
-        if (dataHasChanged) {
-            String jsonData = createJsonData();
-            server.send(200, "application/json", jsonData);
-            dataHasChanged = false;
-            return;
-        }
-        
-        // Handle other web server requests
-        server.handleClient();
-        
-        // Small delay to prevent overwhelming the system
-        delay(10);
-    }
-    
-    // Timeout reached - send current data anyway
-    String jsonData = createJsonData();
-    server.send(200, "application/json", jsonData);
-}
 
-void WiFiVehicleServer::checkForDataChanges() {
-    static unsigned long lastCheck = 0;
-    unsigned long currentTime = millis();
-    
-    // Only check every DATA_CHANGE_CHECK_INTERVAL ms
-    if (currentTime - lastCheck < DATA_CHANGE_CHECK_INTERVAL) {
-        return;
-    }
-    lastCheck = currentTime;
-    
-    String currentJsonData = createJsonData();
-    
-    // Compare with last known data
-    if (currentJsonData != lastJsonData) {
-        lastJsonData = currentJsonData;
-        lastDataChangeTime = currentTime;
-        dataHasChanged = true;
-    }
-}
 
 void WiFiVehicleServer::handleNotFound() {
     String message = "File Not Found\n\n";
@@ -167,9 +103,8 @@ void WiFiVehicleServer::handleNotFound() {
 
 String WiFiVehicleServer::createJsonData() {
     // Create JSON document
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(2048);
     
-    doc["timestamp"] = millis();
     doc["coolantTemp"] = currentVehicleData.coolantTemp;
     doc["fuelLevel"] = currentVehicleData.fuelLevel;
     doc["oilWarning"] = currentVehicleData.oilWarning;
@@ -185,10 +120,18 @@ String WiFiVehicleServer::createJsonData() {
     doc["location"] = currentVehicleData.location;
     
     String jsonString;
-    serializeJson(doc, jsonString);
+    size_t bytesWritten = serializeJson(doc, jsonString);
+    
+    // Debug: Check if serialization was successful
+    if (bytesWritten == 0) {
+        Serial.println("ERROR: Failed to serialize JSON data");
+        return "{\"error\": \"serialization_failed\"}";
+    }
     
     return jsonString;
 }
+
+
 
 void WiFiVehicleServer::update() {
     // Handle web server requests

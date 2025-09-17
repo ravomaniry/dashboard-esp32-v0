@@ -12,8 +12,6 @@
 #define WIFI_PASSWORD "car123456"
 #define WIFI_PORT 80
 #define MAX_CLIENTS 4
-#define LONG_POLL_TIMEOUT_MS 30000  // 30 seconds max wait time
-#define DATA_CHANGE_CHECK_INTERVAL 100  // Check for data changes every 100ms
 
 // Connection states
 enum WiFiState {
@@ -32,10 +30,6 @@ private:
     String apSSID;
     String apPassword;
     
-    // Long polling variables
-    String lastJsonData;
-    unsigned long lastDataChangeTime;
-    bool dataHasChanged;
     
     void setupAP();
     void setupWebServer();
@@ -43,9 +37,7 @@ private:
     String createJsonData();
     void handleRoot();
     void handleData();
-    void handleLongPoll();
     void handleNotFound();
-    void checkForDataChanges();
 
 public:
     WiFiVehicleServer();
