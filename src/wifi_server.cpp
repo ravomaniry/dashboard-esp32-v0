@@ -42,8 +42,6 @@ void WiFiVehicleServer::startAP(const String& ssid, const String& password) {
     apSSID = ssid;
     apPassword = password;
     
-    Serial.printf("Starting WiFi Access Point: %s\n", apSSID.c_str());
-    
     // Configure WiFi in AP mode
     WiFi.mode(WIFI_AP);
     WiFi.softAP(apSSID.c_str(), apPassword.c_str());
@@ -52,11 +50,6 @@ void WiFiVehicleServer::startAP(const String& ssid, const String& password) {
     
     // Setup web server
     setupWebServer();
-    
-    Serial.printf("WiFi AP started successfully!\n");
-    Serial.printf("SSID: %s\n", apSSID.c_str());
-    Serial.printf("Password: %s\n", apPassword.c_str());
-    Serial.printf("IP Address: %s\n", WiFi.softAPIP().toString().c_str());
     
     digitalWrite(connectionStatusLED, HIGH);
 }
@@ -111,8 +104,6 @@ void WiFiVehicleServer::handleLongPoll() {
         }
     }
     
-    Serial.printf("Long poll request started, timeout: %lu ms\n", timeout);
-    
     // Wait for data to change or timeout
     while (millis() - startTime < timeout) {
         // Check for data changes
@@ -122,7 +113,6 @@ void WiFiVehicleServer::handleLongPoll() {
             String jsonData = createJsonData();
             server.send(200, "application/json", jsonData);
             dataHasChanged = false;
-            Serial.printf("Long poll completed with data change after %lu ms\n", millis() - startTime);
             return;
         }
         
@@ -136,7 +126,6 @@ void WiFiVehicleServer::handleLongPoll() {
     // Timeout reached - send current data anyway
     String jsonData = createJsonData();
     server.send(200, "application/json", jsonData);
-    Serial.printf("Long poll timed out after %lu ms\n", millis() - startTime);
 }
 
 void WiFiVehicleServer::checkForDataChanges() {
@@ -156,7 +145,6 @@ void WiFiVehicleServer::checkForDataChanges() {
         lastJsonData = currentJsonData;
         lastDataChangeTime = currentTime;
         dataHasChanged = true;
-        Serial.println("Vehicle data changed - triggering long poll response");
     }
 }
 
@@ -243,10 +231,4 @@ String WiFiVehicleServer::getSSID() {
 }
 
 void WiFiVehicleServer::printWiFiInfo() {
-    Serial.println("=== WiFi Information ===");
-    Serial.printf("State: %d\n", currentState);
-    Serial.printf("SSID: %s\n", getSSID().c_str());
-    Serial.printf("IP Address: %s\n", getIPAddress().c_str());
-    Serial.printf("MAC Address: %s\n", WiFi.macAddress().c_str());
-    Serial.println("========================");
 }

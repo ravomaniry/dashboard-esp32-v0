@@ -9,13 +9,7 @@ const int OPTIMUM_TEMP_MAX = 95;
 // Global vehicle data
 VehicleData currentVehicleData = {0};
 
-// No pin configuration needed - ESP32 receives data via serial communication
-SensorPins sensorPins = {0}; // Placeholder - not used
-
 void initSensors() {
-    // No pin initialization needed - ESP32 receives data via serial
-    Serial.println("Vehicle data structure initialized");
-    
     // Initialize with safe default values
     currentVehicleData.coolantTemp = 85.0;
     currentVehicleData.fuelLevel = 50.0;
@@ -31,8 +25,6 @@ void initSensors() {
     currentVehicleData.speed = 0.0;
     currentVehicleData.location = "0.0,0.0";
 }
-
-// All sensor reading functions removed - ESP32 receives data via serial communication
 
 bool isCritical(int value, int safeMin, int safeMax, bool twoSided, bool oilGauge, bool oilValue) {
     if(oilGauge) return oilValue; // LOW = critical
