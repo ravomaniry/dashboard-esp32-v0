@@ -35,8 +35,11 @@ private:
     void setupWebServer();
     void sendVehicleData();
     String createJsonData();
+    String createDataStructure();
+    void createBinaryData(uint8_t* buffer, size_t& size);
     void handleRoot();
     void handleData();
+    void handleDataStructure();
     void handleNotFound();
 
 public:
