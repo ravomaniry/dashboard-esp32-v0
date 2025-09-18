@@ -1,11 +1,11 @@
 /*
- * ESP32 Vehicle Data Relay
+ * ESP32 Vehicle Data Relay - TCP Version
  * 
  * This code implements a vehicle data relay system that:
  * 1. Receives sensor data from Arduinos via serial communication
  * 2. Parses serial messages in KEY:VALUE format
- * 3. Acts as WiFi server to send data to web clients (ONE-WAY ONLY)
- * 4. Includes web interface for data access
+ * 3. Acts as TCP server to send data to clients (ONE-WAY ONLY)
+ * 4. Uses persistent TCP connections for efficient data streaming
  * 5. No sensor reading - pure data relay
  * 
  * Serial Format: KEY:VALUE (e.g., SPEED:120, COOLANT:90, FUEL:50)
@@ -15,7 +15,7 @@
 
 // Our modular components
 #include "vehicle_data.h"
-#include "wifi_server.h"
+#include "tcp_server.h"
 
 // Configuration
 #define CONNECTION_LED_PIN 2  // Built-in LED pin for most ESP32 boards
@@ -44,8 +44,8 @@ void updateMessageLED() {
         unsigned long currentTime = millis();
         if (currentTime - ledFlashStartTime >= MESSAGE_LED_FLASH_DURATION) {
             ledFlashActive = false;
-            // Only turn off LED if WiFi is not connected
-            if (!wifiServer.isConnected()) {
+            // Only turn off LED if no TCP clients are connected
+            if (!tcpServer.isConnected()) {
                 digitalWrite(CONNECTION_LED_PIN, LOW);
             }
         }
@@ -59,11 +59,8 @@ void setup() {
 
     initSensors();
     
-    // Initialize WiFi server
-    Serial.println("Initializing WiFi server...");
-    wifiServer.init(CONNECTION_LED_PIN, DATA_SEND_INTERVAL);
-    
-    Serial.println("Setup complete!");
+    // Initialize TCP server
+    tcpServer.init(CONNECTION_LED_PIN, DATA_SEND_INTERVAL);
 }
 
 void loop() {
@@ -81,8 +78,8 @@ void loop() {
         handleSerialMessage(message, "Arduino2");
     }
     
-    // Handle WiFi communication (send data to web clients)
-    wifiServer.update();
+    // Handle TCP communication (send data to clients)
+    tcpServer.update();
     
     // Update message LED flash state
     updateMessageLED();

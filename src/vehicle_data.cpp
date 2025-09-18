@@ -10,11 +10,11 @@ const int OPTIMUM_TEMP_MAX = 95;
 VehicleData currentVehicleData = {0};
 
 void initSensors() {
-    // Initialize with safe default values
-    currentVehicleData.coolantTemp = 85.0;
-    currentVehicleData.fuelLevel = 50.0;
+    // Initialize with zero/safe default values
+    currentVehicleData.coolantTemp = 0.0;
+    currentVehicleData.fuelLevel = 0.0;
     currentVehicleData.oilWarning = false;
-    currentVehicleData.batteryVoltage = 12.6;
+    currentVehicleData.batteryVoltage = 0.0;
     currentVehicleData.drlOn = false;
     currentVehicleData.lowBeamOn = false;
     currentVehicleData.highBeamOn = false;
