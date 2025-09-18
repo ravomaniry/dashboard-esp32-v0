@@ -29,15 +29,11 @@ A vehicle data relay system that receives sensor data from Arduinos via serial c
 3. Connect the ESP32 to your computer.
 4. Build and upload the project using the `/home/ravo/.platformio/penv/bin/pio run --target upload` command.
 
-## Demo Mode
-
-Set the `IS_DEMO` variable in `src/main.ino` to `true` to enable a demo mode that cycles through various values. This is useful for testing the Bluetooth transmission without real sensor data. Demo mode includes simulated speed (0-120 km/h) and location data (circular movement around a test area).
-
 ## Serial Communication
 
 The ESP32 receives data from Arduinos via serial communication.
 
-The message format is `KEY:VALUE`, where `KEY` can be `SPEED`, `LOCATION`, `COOLANT`, `FUEL`, `OIL`, `BATTERY`, `DRL`, `LOWBEAM`, `HIGHBEAM`, `LEFTURN`, `RIGHTURN`, `HAZARD`, or `GLOW`.
+The message format is `KEY:VALUE`, where `KEY` can be `SPEED`, `LOCATION`, `COOLANT`, `FUEL`, `OIL_WARN`, `BATTERY`, `DRL`, `LOWBEAM`, `HIGHBEAM`, `LEFTURN`, `RIGHTURN`, `HAZARD`, or `GLOW`.
 
 **Example:**
 

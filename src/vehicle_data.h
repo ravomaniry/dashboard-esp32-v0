@@ -7,7 +7,7 @@
 struct VehicleData {
     float coolantTemp;      // Coolant temperature in Celsius
     float fuelLevel;        // Fuel level percentage (0-100)
-    bool oilWarning;        // Oil pressure warning (true = low pressure)
+    bool oilWarning;        // Oil pressure warning (true = low pressure, false = normal pressure)
     float batteryVoltage;   // Battery voltage
     bool drlOn;            // Daytime running lights
     bool lowBeamOn;        // Low beam headlights

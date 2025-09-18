@@ -60,7 +60,7 @@ Both Arduinos send data using the `KEY:VALUE` format:
 - `LOCATION:40.7128,-74.0060` - GPS coordinates (latitude,longitude)
 - `COOLANT:90` - Coolant temperature in Celsius
 - `FUEL:50` - Fuel level percentage (0-100)
-- `OIL:0` - Oil pressure status (0=OK, 1=Low)
+- `OIL_WARN:1` - Oil pressure warning status (1=Low pressure warning, 0=Normal pressure)
 - `BATTERY:12.6` - Battery voltage
 - `DRL:1` - Daytime running lights (0=OFF, 1=ON)
 - `LOWBEAM:0` - Low beam headlights (0=OFF, 1=ON)
@@ -185,11 +185,6 @@ pio run
 # Open main.ino and compile normally
 ```
 
-### Demo Mode
-
-- Set `IS_DEMO = true` in the code to enable demo mode
-- Demo mode cycles through test values for all sensors and GPS data
-- Speed sweeps from 0-120 km/h
 - Location simulates circular movement around a test area
 - Useful for testing Bluetooth transmission without real sensors
 - All sensor values cycle through realistic ranges for testing
