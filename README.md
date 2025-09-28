@@ -1,16 +1,16 @@
 # ESP32 Vehicle Data Connector
 
-A vehicle data relay system that receives sensor data from Arduinos via serial communication and transmits it to an Android app via Bluetooth. The ESP32 acts as a bridge between vehicle sensors and mobile applications.
+A vehicle data relay system that receives sensor data from three Arduinos via serial communication and transmits it to clients via TCP. The ESP32 acts as a bridge between vehicle sensors and connected applications.
 
 ## Features
 
-- **Dual Arduino Support**: Connects to two Arduinos simultaneously via separate serial ports
+- **Triple Arduino Support**: Connects to three Arduinos simultaneously via separate serial ports
 - **Speed and Location Tracking**: Receives GPS-based speed and location data
 - **Vehicle Sensors**: Coolant temperature, fuel level, oil status, battery voltage
 - **Light Status**: DRL, headlights, turn signals, hazard lights
-- **Bluetooth Communication**: Secure data transmission to Android apps
+- **TCP Server**: WiFi access point with TCP server for data transmission
 - **Serial Data Relay**: Receives data from multiple Arduinos via serial communication
-- **Arduino Identification**: Debug messages identify which Arduino sent each data packet
+- **Arduino Identification**: System identifies which Arduino sent each data packet
 
 ## Hardware
 
@@ -20,7 +20,7 @@ A vehicle data relay system that receives sensor data from Arduinos via serial c
 
 - Arduino Framework
 - PlatformIO
-- [ESP32CompositeColorVideo](https://github.com/marciot/ESP32CompositeColorVideo) library
+- WiFi and TCP libraries (built into ESP32 core)
 
 ## Setup
 
@@ -53,9 +53,9 @@ HAZARD:0
 GLOW:1
 ```
 
-## Bluetooth Data Format
+## TCP Data Format
 
-The ESP32 sends JSON data over Bluetooth to connected Android apps:
+The ESP32 sends binary data over TCP to connected clients:
 
 ```json
 {
@@ -74,7 +74,7 @@ The ESP32 sends JSON data over Bluetooth to connected Android apps:
 }
 ```
 
-## Dual Arduino Wiring
+## Triple Arduino Wiring
 
 ### Arduino 1 (Primary - Serial)
 
@@ -98,8 +98,20 @@ Arduino TX (5V) ──470Ω──┐── ESP32 RX2 (GPIO16)
                           │
                          GND
 
-
 ESP32 TX2 (GPIO17) ───────> Arduino RX  (direct connection)
+GND ───────────────────── GND
+```
+
+### Arduino 3 (Tertiary - Software Serial)
+
+```
+Arduino TX (5V) ──470Ω──┐── ESP32 RX (GPIO5)
+                          │
+                          1kΩ
+                          │
+                         GND
+
+ESP32 TX (GPIO4) ────────> Arduino RX  (direct connection)
 GND ───────────────────── GND
 ```
 
@@ -107,5 +119,6 @@ GND ───────────────────── GND
 
 - **Arduino 1**: Uses ESP32 Serial (TX0/RX0) - typically USB connection
 - **Arduino 2**: Uses ESP32 Serial2 (TX2/RX2) - hardware serial pins
+- **Arduino 3**: Uses ESP32 Software Serial (GPIO4 TX, GPIO5 RX)
 
 **Note:** The ESP32 operates at a 3.3V logic level. The provided wiring diagram includes a voltage divider to protect the ESP32's 3.3V RX pin from the Arduino's 5V TX signal. While the direct connection from the ESP32's 3.3V TX to the Arduino's 5V RX might work, a logic level shifter is recommended for reliable communication.
